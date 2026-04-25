@@ -184,25 +184,13 @@ export function CallProvider({ children }) {
 
   const playRingtone = () => {
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-      const oscillator = audioCtx.createOscillator()
-      const gainNode = audioCtx.createGain()
-      oscillator.connect(gainNode)
-      gainNode.connect(audioCtx.destination)
-      oscillator.frequency.setValueAtTime(440, audioCtx.currentTime)
-      gainNode.gain.setValueAtTime(0, audioCtx.currentTime)
-      oscillator.start()
-
-      let ringOn = true
-      const ringInterval = setInterval(() => {
-        if (ringtoneRef.current?.stopped) { clearInterval(ringInterval); return }
-        ringOn = !ringOn
-        gainNode.gain.setValueAtTime(ringOn ? 0.25 : 0, audioCtx.currentTime)
-      }, 500)
-
-      ringtoneRef.current = { oscillator, audioCtx, ringInterval, stopped: false }
+      if (ringtoneRef.current) return // Already playing
+      const audio = new Audio('/kuru-kuru-kururing.mp3')
+      audio.loop = true
+      audio.play().catch(e => console.warn('Autoplay prevented:', e))
+      ringtoneRef.current = { audio, stopped: false }
     } catch (e) {
-      // Ringtone not supported
+      console.error('Failed to play ringtone', e)
     }
   }
 
@@ -210,9 +198,10 @@ export function CallProvider({ children }) {
     if (ringtoneRef.current) {
       ringtoneRef.current.stopped = true
       try {
-        ringtoneRef.current.oscillator.stop()
-        ringtoneRef.current.audioCtx.close()
-        clearInterval(ringtoneRef.current.ringInterval)
+        if (ringtoneRef.current.audio) {
+          ringtoneRef.current.audio.pause()
+          ringtoneRef.current.audio.currentTime = 0
+        }
       } catch (e) {}
       ringtoneRef.current = null
     }

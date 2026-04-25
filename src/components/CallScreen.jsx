@@ -4,7 +4,6 @@ import {
   PhoneOff, Mic, MicOff, Video, VideoOff,
   Phone, Maximize2, Minimize2
 } from 'lucide-react'
-import { useState } from 'react'
 
 export default function CallScreen({
   callState, callType, remoteUser,

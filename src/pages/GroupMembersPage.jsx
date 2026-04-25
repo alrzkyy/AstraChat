@@ -1,9 +1,35 @@
 import { useOutletContext, Link } from 'react-router-dom'
 import Avatar from '../components/Avatar'
-import { MoreVertical } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
 export default function GroupMembersPage() {
-  const { members, group, profile } = useOutletContext()
+  const { members, setMembers, group, profile } = useOutletContext()
+
+  const handleKick = async (memberUserId) => {
+    if (!confirm('Apakah anda yakin ingin mengeluarkan anggota ini?')) return
+
+    try {
+      const { error } = await supabase
+        .from('group_members')
+        .delete()
+        .eq('group_id', group.id)
+        .eq('user_id', memberUserId)
+
+      if (error) throw error
+
+      setMembers(members.filter(m => m.user_id !== memberUserId))
+    } catch (err) {
+      alert('Gagal mengeluarkan anggota: ' + err.message)
+    }
+  }
+
+  const canKick = (targetRole, targetUserId) => {
+    if (targetUserId === profile?.id) return false
+    if (group?.myRole !== 'owner' && group?.myRole !== 'admin') return false
+    if (group?.myRole === 'owner') return true
+    if (group?.myRole === 'admin' && targetRole === 'member') return true
+    return false
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 fade-in h-full">
@@ -33,9 +59,14 @@ export default function GroupMembersPage() {
               </p>
             </div>
 
-            <button className="p-2 text-dark-500 hover:text-white rounded-xl hover:bg-dark-700 transition-colors opacity-0 group-hover/item:opacity-100 focus:opacity-100">
-              <MoreVertical className="w-5 h-5" />
-            </button>
+            {canKick(member.role, member.user_id) && (
+              <button 
+                onClick={() => handleKick(member.user_id)}
+                className="px-3 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors opacity-0 group-hover/item:opacity-100 focus:opacity-100"
+              >
+                Keluarkan
+              </button>
+            )}
           </div>
         ))}
       </div>

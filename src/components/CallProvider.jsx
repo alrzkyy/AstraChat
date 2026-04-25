@@ -39,6 +39,8 @@ export function CallProvider({ children }) {
   const durationIntervalRef = useRef(null)
   const ringtoneRef = useRef(null)
   const callStateRef = useRef('idle')
+  const callTypeRef = useRef('voice')
+  const callDurationRef = useRef(0)
   const pendingOfferRef = useRef(null)
   const signalingChannelsRef = useRef({})
 
@@ -46,6 +48,14 @@ export function CallProvider({ children }) {
   useEffect(() => {
     callStateRef.current = callState
   }, [callState])
+
+  useEffect(() => {
+    callTypeRef.current = callType
+  }, [callType])
+
+  useEffect(() => {
+    callDurationRef.current = callDuration
+  }, [callDuration])
 
   // ===================== SIGNALING CHANNEL =====================
   useEffect(() => {
@@ -296,10 +306,49 @@ export function CallProvider({ children }) {
     signalingChannelsRef.current = {}
   }, [localStream])
 
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const logCall = async (targetId, type, duration = 0, isMissed = false, isRejected = false) => {
+    try {
+      const { data: conv } = await supabase
+        .from('direct_conversations')
+        .select('id')
+        .or(`and(user1_id.eq.${user?.id},user2_id.eq.${targetId}),and(user1_id.eq.${targetId},user2_id.eq.${user?.id})`)
+        .single()
+      
+      if (!conv) return
+
+      let content = `📞 Panggilan ${type === 'video' ? 'Video' : 'Suara'}`
+      if (isMissed) content = `${content} Tak Terjawab`
+      else if (isRejected) content = `${content} Ditolak`
+      else content = `${content} Berakhir (${formatDuration(duration)})`
+
+      await supabase.from('direct_messages').insert({
+        conversation_id: conv.id,
+        sender_id: user.id,
+        content: content,
+        message_type: 'text'
+      })
+    } catch (e) {
+      console.warn('Gagal mencatat log panggilan:', e)
+    }
+  }
+
   const endCall = useCallback(() => {
     stopRingtone()
     if (remoteUserIdRef.current) {
       sendSignal(remoteUserIdRef.current, 'call-end', {})
+      
+      // Jika yang menutup adalah pemanggil dan status masih memanggil
+      if (callStateRef.current === 'calling') {
+        logCall(remoteUserIdRef.current, callTypeRef.current || 'voice', 0, true, false)
+      } else if (callStateRef.current === 'connected') {
+        logCall(remoteUserIdRef.current, callTypeRef.current || 'voice', callDurationRef.current || 0, false, false)
+      }
     }
     doCleanup()
     setCallState('idle')
@@ -309,6 +358,7 @@ export function CallProvider({ children }) {
     stopRingtone()
     if (remoteUserIdRef.current) {
       sendSignal(remoteUserIdRef.current, 'call-reject', {})
+      logCall(remoteUserIdRef.current, callTypeRef.current || 'voice', 0, false, true)
     }
     doCleanup()
     setCallState('idle')

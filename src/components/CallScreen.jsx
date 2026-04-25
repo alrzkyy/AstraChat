@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Avatar from './Avatar'
 import {
   PhoneOff, Mic, MicOff, Video, VideoOff,
@@ -12,22 +12,20 @@ export default function CallScreen({
   endCall, toggleMute, toggleCamera
 }) {
 
-  const localVideoRef = useRef(null)
-  const remoteVideoRef = useRef(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef(null)
 
-  // Attach local stream to video element
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream
+  // Attach local stream to video element (using callback ref for conditional rendering)
+  const localVideoRef = useCallback((node) => {
+    if (node && localStream) {
+      node.srcObject = localStream
     }
   }, [localStream])
 
-  // Attach remote stream to video element
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream
+  // Attach remote stream to video element (using callback ref for conditional rendering)
+  const remoteVideoRef = useCallback((node) => {
+    if (node && remoteStream) {
+      node.srcObject = remoteStream
     }
   }, [remoteStream])
 
@@ -63,17 +61,17 @@ export default function CallScreen({
       {/* Main content */}
       <div className="relative flex-1 flex flex-col items-center justify-center z-10">
         {/* Video call: remote video fullscreen */}
-        {isVideoCall && isConnected && remoteStream && (
+        {isVideoCall && remoteStream && (
           <video
             ref={remoteVideoRef}
             autoPlay
             playsInline
-            className="absolute inset-0 w-full h-full object-cover"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${isConnected ? 'opacity-100' : 'opacity-0'}`}
           />
         )}
 
         {/* Voice call: hidden audio element to play remote sound */}
-        {!isVideoCall && isConnected && remoteStream && (
+        {!isVideoCall && remoteStream && (
           <audio
             ref={remoteVideoRef}
             autoPlay
@@ -165,11 +163,10 @@ export default function CallScreen({
           {/* Mute toggle */}
           <button
             onClick={toggleMute}
-            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 ${
-              isMuted
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 ${isMuted
                 ? 'bg-red-500/20 text-red-400 ring-2 ring-red-500/30'
                 : 'bg-dark-800/80 text-white hover:bg-dark-700/80'
-            }`}
+              }`}
             title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
@@ -179,11 +176,10 @@ export default function CallScreen({
           {isVideoCall && (
             <button
               onClick={toggleCamera}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 ${
-                isCameraOff
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 ${isCameraOff
                   ? 'bg-red-500/20 text-red-400 ring-2 ring-red-500/30'
                   : 'bg-dark-800/80 text-white hover:bg-dark-700/80'
-              }`}
+                }`}
               title={isCameraOff ? 'Nyalakan Kamera' : 'Matikan Kamera'}
             >
               {isCameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}

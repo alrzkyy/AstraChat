@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../components/AuthProvider'
 import { useCall } from '../components/CallProvider'
 import { supabase } from '../lib/supabase'
@@ -15,7 +15,7 @@ import { validateFile, formatFileSize } from '../lib/utils'
 
 export default function DirectChatPage() {
   const { conversationId } = useParams()
-  const { profile } = useAuth()
+  const { profile, onlineUsers } = useAuth()
   const { startCall } = useCall()
   const navigate = useNavigate()
 
@@ -28,11 +28,15 @@ export default function DirectChatPage() {
   const [uploading, setUploading] = useState(false)
   const [otherUser, setOtherUser] = useState(null)
   const [conversation, setConversation] = useState(null)
+  const [isTyping, setIsTyping] = useState(false)
 
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
   const fileInputRef = useRef(null)
   const inputRef = useRef(null)
+  const channelRef = useRef(null)
+  const typingTimeoutRef = useRef(null)
+  const lastTypingTimeRef = useRef(0)
 
   // Load encryption key deterministically from conversation ID
   useEffect(() => {
@@ -47,12 +51,35 @@ export default function DirectChatPage() {
     loadConversation()
   }, [profile, conversationId])
 
+  // Realtime profile updates for otherUser
+  useEffect(() => {
+    if (!otherUser?.id) return
+
+    const channel = supabase
+      .channel(`public:profiles:${otherUser.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${otherUser.id}`,
+      }, (payload) => {
+        setOtherUser(payload.new)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [otherUser?.id])
+
   // Realtime subscription
   useEffect(() => {
     if (!conversationId || !encKey) return
 
     const channel = supabase
-      .channel(`dm:${conversationId}`)
+      .channel(`dm:${conversationId}`, {
+        config: { broadcast: { self: false } },
+      })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -83,7 +110,16 @@ export default function DirectChatPage() {
           setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, status: payload.new.status } : m))
         }
       })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.user_id !== profile.id) {
+          setIsTyping(true)
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+          typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 2000)
+        }
+      })
       .subscribe()
+
+    channelRef.current = channel
 
     return () => { supabase.removeChannel(channel) }
   }, [conversationId, encKey])
@@ -233,6 +269,20 @@ export default function DirectChatPage() {
     }
   }
 
+  const handleTyping = (e) => {
+    setNewMessage(e.target.value)
+
+    const now = Date.now()
+    if (channelRef.current && e.target.value.trim() !== '' && now - lastTypingTimeRef.current > 1500) {
+      lastTypingTimeRef.current = now
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { user_id: profile.id }
+      }).catch(() => {})
+    }
+  }
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -270,11 +320,31 @@ export default function DirectChatPage() {
         <button onClick={() => navigate('/dm')} className="p-1 text-dark-400 hover:text-white transition-colors rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <Avatar src={otherUser?.avatar_url} name={otherUser?.full_name} size="md" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-white truncate">{otherUser?.full_name}</h2>
-          <p className="text-xs text-dark-400">@{otherUser?.username}</p>
-        </div>
+        <Link to={`/profile/${otherUser?.username}`} className="flex items-center gap-3 flex-1 min-w-0 hover:bg-dark-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors">
+          <div className="relative">
+            <Avatar src={otherUser?.avatar_url} name={otherUser?.full_name} size="md" />
+            {onlineUsers?.has(otherUser?.id) && (
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-dark-900 rounded-full"></span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm font-semibold text-white truncate">{otherUser?.full_name}</h2>
+            <div className="flex items-center gap-2">
+              {isTyping ? (
+                <span className="flex items-center gap-1.5 text-xs text-primary-400 font-medium animate-pulse">
+                  Sedang mengetik...
+                </span>
+              ) : onlineUsers?.has(otherUser?.id) ? (
+                <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                  Online
+                </span>
+              ) : (
+                <span className="text-xs text-dark-400 truncate">@{otherUser?.username}</span>
+              )}
+            </div>
+          </div>
+        </Link>
         <div className="flex items-center gap-1">
           <button
             onClick={() => otherUser && startCall(otherUser, 'voice')}
@@ -363,7 +433,7 @@ export default function DirectChatPage() {
             ref={inputRef}
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleTyping}
             placeholder="Ketik pesan..."
             className="w-full px-4 py-2.5 bg-dark-800 border border-dark-700 rounded-xl text-white text-sm placeholder:text-dark-500 focus:outline-none focus:border-primary-500 transition-colors"
             autoComplete="off"

@@ -5,6 +5,7 @@ const AuthContext = createContext({
   user: null,
   profile: null,
   loading: true,
+  onlineUsers: new Set(),
   signUp: async () => {},
   signIn: async () => {},
   signOut: async () => {},
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [onlineUsers, setOnlineUsers] = useState(new Set())
 
   const fetchProfile = async (userId) => {
     try {
@@ -76,6 +78,52 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Realtime profile updates and Presence
+  useEffect(() => {
+    if (!user?.id) {
+      setOnlineUsers(new Set())
+      return
+    }
+
+    // 1. Listen for own profile updates
+    const profileChannel = supabase
+      .channel(`public:profiles:${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${user.id}`,
+      }, (payload) => {
+        setProfile(payload.new)
+      })
+      .subscribe()
+
+    // 2. Global presence tracking
+    const presenceChannel = supabase.channel('global-presence')
+    
+    presenceChannel.on('presence', { event: 'sync' }, () => {
+      const state = presenceChannel.presenceState()
+      const onlineIds = new Set()
+      for (const key in state) {
+        state[key].forEach(p => {
+          if (p.user_id) onlineIds.add(p.user_id)
+        })
+      }
+      setOnlineUsers(onlineIds)
+    })
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({ user_id: user.id })
+      }
+    })
+
+    return () => {
+      supabase.removeChannel(profileChannel)
+      supabase.removeChannel(presenceChannel)
+    }
+  }, [user?.id])
+
   const signUp = async ({ email, password, fullName, username, phone }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -127,7 +175,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, onlineUsers, signUp, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

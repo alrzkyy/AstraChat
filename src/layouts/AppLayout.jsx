@@ -34,6 +34,14 @@ export default function AppLayout({ hideNav = false }) {
   useEffect(() => {
     if (!profile?.id) return
 
+    // Mark existing 'sent' messages to me as 'delivered' since I am now online
+    supabase
+      .from('direct_messages')
+      .update({ status: 'delivered' })
+      .eq('status', 'sent')
+      .neq('sender_id', profile.id)
+      .then()
+
     const channel = supabase
       .channel('global-dm-receipts')
       .on('postgres_changes', {

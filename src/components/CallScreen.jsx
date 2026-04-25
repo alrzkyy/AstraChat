@@ -72,6 +72,16 @@ export default function CallScreen({
           />
         )}
 
+        {/* Voice call: hidden audio element to play remote sound */}
+        {!isVideoCall && isConnected && remoteStream && (
+          <audio
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className="hidden"
+          />
+        )}
+
         {/* Voice call or waiting: show avatar */}
         {(!isVideoCall || isCalling || !remoteStream) && (
           <div className="flex flex-col items-center text-center px-4">

@@ -13,7 +13,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const navItems = [
@@ -28,7 +28,12 @@ export default function AppLayout({ hideNav = false }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const locationRef = useRef(location.pathname)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    locationRef.current = location.pathname
+  }, [location.pathname])
 
   // Global listener: mark messages as "delivered" (2 gray checks) when app is open
   useEffect(() => {
@@ -52,7 +57,7 @@ export default function AppLayout({ hideNav = false }) {
         const newMsg = payload.new
         // If message is sent by someone else and we received it globally
         if (newMsg.sender_id !== profile.id && newMsg.status === 'sent') {
-          const isOnChatPage = location.pathname === `/dm/${newMsg.conversation_id}`
+          const isOnChatPage = locationRef.current === `/dm/${newMsg.conversation_id}`
           // If we are NOT on the chat page, mark as delivered.
           // (If we ARE on the chat page, DirectChatPage will mark it as read).
           if (!isOnChatPage) {

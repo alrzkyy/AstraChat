@@ -320,7 +320,7 @@ export default function DirectChatPage() {
         <button onClick={() => navigate('/dm')} className="p-1 text-dark-400 hover:text-white transition-colors rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <Link to={`/profile/${otherUser?.username}`} className="flex items-center gap-3 flex-1 min-w-0 hover:bg-dark-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors">
+        <Link to={`/user/${otherUser?.username}`} className="flex items-center gap-3 flex-1 min-w-0 hover:bg-dark-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors">
           <div className="relative">
             <Avatar src={otherUser?.avatar_url} name={otherUser?.full_name} size="md" />
             {onlineUsers?.has(otherUser?.id) && (

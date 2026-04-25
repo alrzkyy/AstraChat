@@ -40,6 +40,7 @@ export function CallProvider({ children }) {
   const ringtoneRef = useRef(null)
   const callStateRef = useRef('idle')
   const pendingOfferRef = useRef(null)
+  const signalingChannelsRef = useRef({})
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -142,15 +143,34 @@ export function CallProvider({ children }) {
 
   // ===================== HELPERS =====================
   const sendSignal = useCallback((targetUserId, event, payload = {}) => {
-    const ch = supabase.channel(`user-calls:${targetUserId}`, {
-      config: { broadcast: { self: false } },
-    })
-    ch.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        ch.send({ type: 'broadcast', event, payload })
-        setTimeout(() => supabase.removeChannel(ch), 500)
+    let chData = signalingChannelsRef.current[targetUserId]
+    
+    function doSend(channel, ev, pay) {
+      channel.send({ type: 'broadcast', event: ev, payload: pay })
+    }
+
+    if (!chData) {
+      const ch = supabase.channel(`user-calls:${targetUserId}`, {
+        config: { broadcast: { self: false } },
+      })
+      chData = { ch, isSubscribed: false, queue: [] }
+      signalingChannelsRef.current[targetUserId] = chData
+      
+      ch.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          chData.isSubscribed = true
+          doSend(ch, event, payload)
+          chData.queue.forEach(msg => doSend(ch, msg.event, msg.payload))
+          chData.queue = []
+        }
+      })
+    } else {
+      if (chData.isSubscribed) {
+        doSend(chData.ch, event, payload)
+      } else {
+        chData.queue.push({ event, payload })
       }
-    })
+    }
   }, [])
 
   const flushIceCandidates = useCallback(async (pc) => {
@@ -268,6 +288,12 @@ export function CallProvider({ children }) {
     iceCandidatesQueue.current = []
     remoteUserIdRef.current = null
     pendingOfferRef.current = null
+
+    // Clean up signaling channels
+    Object.values(signalingChannelsRef.current).forEach(chData => {
+      supabase.removeChannel(chData.ch).catch(console.warn)
+    })
+    signalingChannelsRef.current = {}
   }, [localStream])
 
   const endCall = useCallback(() => {

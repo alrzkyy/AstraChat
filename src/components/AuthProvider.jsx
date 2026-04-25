@@ -48,13 +48,25 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    const MIN_SPLASH_TIME = 1500
+    const startTime = Date.now()
+
+    const finalizeLoading = () => {
+      const elapsed = Date.now() - startTime
+      if (elapsed < MIN_SPLASH_TIME) {
+        setTimeout(() => setLoading(false), MIN_SPLASH_TIME - elapsed)
+      } else {
+        setLoading(false)
+      }
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchProfile(session.user.id)
       }
-      setLoading(false)
+      finalizeLoading()
     })
 
     // Listen for auth changes

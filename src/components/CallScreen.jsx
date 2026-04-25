@@ -2,14 +2,14 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import Avatar from './Avatar'
 import {
   PhoneOff, Mic, MicOff, Video, VideoOff,
-  Phone, Maximize2, Minimize2
+  Phone, Maximize2, Minimize2, Circle, Square
 } from 'lucide-react'
 
 export default function CallScreen({
   callState, callType, remoteUser,
   localStream, remoteStream,
-  isMuted, isCameraOff, callDuration,
-  endCall, toggleMute, toggleCamera
+  isMuted, isCameraOff, callDuration, isRecording,
+  endCall, toggleMute, toggleCamera, startRecording, stopRecording
 }) {
 
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -193,6 +193,18 @@ export default function CallScreen({
             title="Akhiri Panggilan"
           >
             <PhoneOff className="w-7 h-7" />
+          </button>
+
+          {/* Recording toggle */}
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 ${isRecording
+                ? 'bg-red-500 text-white animate-pulse'
+                : 'bg-dark-800/80 text-white hover:bg-dark-700/80'
+              }`}
+            title={isRecording ? 'Stop Recording' : 'Start Recording'}
+          >
+            {isRecording ? <Square className="w-6 h-6 fill-current" /> : <Circle className="w-6 h-6" />}
           </button>
 
           {/* Fullscreen toggle */}

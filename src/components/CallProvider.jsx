@@ -31,6 +31,7 @@ export function CallProvider({ children }) {
   const [remoteStream, setRemoteStream] = useState(null)
   const [isMuted, setIsMuted] = useState(false)
   const [isCameraOff, setIsCameraOff] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
   const [callDuration, setCallDuration] = useState(0)
 
   const peerConnectionRef = useRef(null)
@@ -339,8 +340,60 @@ export function CallProvider({ children }) {
     }
   }
 
+  const mediaRecorderRef = useRef(null)
+  const recordedChunksRef = useRef([])
+
+  const startRecording = async () => {
+    try {
+      // Capture the current tab (including system audio)
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      })
+
+      // Combine display stream with the call audio streams if needed
+      // Actually getDisplayMedia with 'System Audio' usually captures the call audio too
+      
+      const recorder = new MediaRecorder(displayStream, {
+        mimeType: 'video/webm;codecs=vp9,opus'
+      })
+
+      recordedChunksRef.current = []
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `AstraChat-Content-${new Date().getTime()}.webm`
+        a.click()
+        
+        // Stop all tracks in display stream
+        displayStream.getTracks().forEach(t => t.stop())
+        setIsRecording(false)
+      }
+
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setIsRecording(true)
+    } catch (err) {
+      console.error('Recording error:', err)
+      alert('Gagal memulai rekaman. Pastikan kamu memberikan izin untuk merekam layar.')
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+  }
+
   const endCall = useCallback(() => {
     stopRingtone()
+    stopRecording() // Auto stop recording on end call
     if (remoteUserIdRef.current) {
       sendSignal(remoteUserIdRef.current, 'call-end', {})
       
@@ -454,9 +507,9 @@ export function CallProvider({ children }) {
   const value = {
     callState, callType, remoteUser,
     localStream, remoteStream,
-    isMuted, isCameraOff, callDuration,
+    isMuted, isCameraOff, callDuration, isRecording,
     startCall, acceptCall, rejectCall, endCall,
-    toggleMute, toggleCamera,
+    toggleMute, toggleCamera, startRecording, stopRecording,
   }
 
   return (
@@ -482,9 +535,12 @@ export function CallProvider({ children }) {
           isMuted={isMuted}
           isCameraOff={isCameraOff}
           callDuration={callDuration}
+          isRecording={isRecording}
           endCall={endCall}
           toggleMute={toggleMute}
           toggleCamera={toggleCamera}
+          startRecording={startRecording}
+          stopRecording={stopRecording}
         />
       )}
     </CallContext.Provider>

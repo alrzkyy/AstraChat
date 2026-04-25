@@ -340,7 +340,10 @@ export default function DirectChatPage() {
                   Online
                 </span>
               ) : (
-                <span className="text-xs text-dark-400 truncate">@{otherUser?.username}</span>
+                <span className="flex items-center gap-1.5 text-xs text-dark-400 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-dark-500"></span>
+                  Offline
+                </span>
               )}
             </div>
           </div>

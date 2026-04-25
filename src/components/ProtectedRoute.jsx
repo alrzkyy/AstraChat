@@ -1,17 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
-import LoadingSpinner from './LoadingSpinner'
+import SplashScreen from './SplashScreen'
 
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
-        <LoadingSpinner size="lg" text="Memuat..." />
-      </div>
-    )
+    return <SplashScreen />
   }
 
   if (!user) {

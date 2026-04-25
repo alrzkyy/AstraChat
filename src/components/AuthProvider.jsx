@@ -22,7 +22,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [minSplashDone, setMinSplashDone] = useState(false)
   const [onlineUsers, setOnlineUsers] = useState(new Set())
+
+  useEffect(() => {
+    // Guaranteed minimum 2.5s splash screen on every hard refresh
+    const timer = setTimeout(() => {
+      setMinSplashDone(true)
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [])
 
   const fetchProfile = async (userId) => {
     try {
@@ -48,25 +57,13 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    const MIN_SPLASH_TIME = 1500
-    const startTime = Date.now()
-
-    const finalizeLoading = () => {
-      const elapsed = Date.now() - startTime
-      if (elapsed < MIN_SPLASH_TIME) {
-        setTimeout(() => setLoading(false), MIN_SPLASH_TIME - elapsed)
-      } else {
-        setLoading(false)
-      }
-    }
-
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchProfile(session.user.id)
       }
-      finalizeLoading()
+      setLoading(false)
     })
 
     // Listen for auth changes
@@ -187,7 +184,16 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, onlineUsers, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      loading: loading || !minSplashDone, 
+      onlineUsers, 
+      signUp, 
+      signIn, 
+      signOut, 
+      refreshProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   )

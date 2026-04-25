@@ -107,13 +107,12 @@ export function CallProvider({ children }) {
       })
       .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
         const pc = peerConnectionRef.current
-        if (!pc) return
+        if (!pc || !pc.remoteDescription) {
+          iceCandidatesQueue.current.push(payload.candidate)
+          return
+        }
         try {
-          if (pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
-          } else {
-            iceCandidatesQueue.current.push(payload.candidate)
-          }
+          await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
         } catch (err) {
           console.error('Error adding ICE candidate:', err)
         }
@@ -254,8 +253,10 @@ export function CallProvider({ children }) {
     stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
     pc.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => remote.addTrack(track))
-      setRemoteStream(new MediaStream(remote.getTracks()))
+      if (event.track) {
+        remote.addTrack(event.track)
+        setRemoteStream(new MediaStream(remote.getTracks()))
+      }
     }
 
     pc.onicecandidate = (event) => {

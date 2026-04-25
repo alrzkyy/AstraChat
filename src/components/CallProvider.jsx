@@ -261,6 +261,42 @@ export function CallProvider({ children }) {
   }, [sendSignal])
 
   // ===================== CALL ACTIONS =====================
+  const doCleanup = useCallback(() => {
+    stopRingtone()
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close()
+      peerConnectionRef.current = null
+    }
+    stopStream(localStream)
+    setLocalStream(null)
+    setRemoteStream(null)
+    setRemoteUser(null)
+    setIsMuted(false)
+    setIsCameraOff(false)
+    setCallDuration(0)
+    iceCandidatesQueue.current = []
+    remoteUserIdRef.current = null
+    pendingOfferRef.current = null
+  }, [localStream])
+
+  const endCall = useCallback(() => {
+    stopRingtone()
+    if (remoteUserIdRef.current) {
+      sendSignal(remoteUserIdRef.current, 'call-end', {})
+    }
+    doCleanup()
+    setCallState('idle')
+  }, [sendSignal, doCleanup])
+
+  const rejectCall = useCallback(() => {
+    stopRingtone()
+    if (remoteUserIdRef.current) {
+      sendSignal(remoteUserIdRef.current, 'call-reject', {})
+    }
+    doCleanup()
+    setCallState('idle')
+  }, [sendSignal, doCleanup])
+
   const startCall = useCallback(async (targetUser, type = 'voice') => {
     if (callStateRef.current !== 'idle') return
 
@@ -308,7 +344,7 @@ export function CallProvider({ children }) {
       doCleanup()
       setCallState('idle')
     }
-  }, [user?.id, profile, setupPeerConnection, sendSignal])
+  }, [user?.id, profile, setupPeerConnection, sendSignal, endCall, doCleanup])
 
   const acceptCall = useCallback(async () => {
     if (callStateRef.current !== 'incoming') return
@@ -331,42 +367,6 @@ export function CallProvider({ children }) {
       rejectCall()
     }
   }, [callType, setupPeerConnection, handleOffer, rejectCall])
-
-  const rejectCall = useCallback(() => {
-    stopRingtone()
-    if (remoteUserIdRef.current) {
-      sendSignal(remoteUserIdRef.current, 'call-reject', {})
-    }
-    doCleanup()
-    setCallState('idle')
-  }, [sendSignal])
-
-  const endCall = useCallback(() => {
-    stopRingtone()
-    if (remoteUserIdRef.current) {
-      sendSignal(remoteUserIdRef.current, 'call-end', {})
-    }
-    doCleanup()
-    setCallState('idle')
-  }, [sendSignal])
-
-  const doCleanup = useCallback(() => {
-    stopRingtone()
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close()
-      peerConnectionRef.current = null
-    }
-    stopStream(localStream)
-    setLocalStream(null)
-    setRemoteStream(null)
-    setRemoteUser(null)
-    setIsMuted(false)
-    setIsCameraOff(false)
-    setCallDuration(0)
-    iceCandidatesQueue.current = []
-    remoteUserIdRef.current = null
-    pendingOfferRef.current = null
-  }, [localStream])
 
   const toggleMute = useCallback(() => {
     if (localStream) {

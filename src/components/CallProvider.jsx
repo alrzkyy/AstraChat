@@ -83,6 +83,8 @@ export function CallProvider({ children }) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
           
+          setCallState('connected')
+
           // Flush ICE candidates using the queue directly
           while (iceCandidatesQueue.current.length > 0) {
             const candidate = iceCandidatesQueue.current.shift()

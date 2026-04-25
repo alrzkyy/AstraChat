@@ -1,5 +1,9 @@
 # AstraChat - Setup Guide
 
+### PUSH MUDAH
+.\push.ps1 -msg "fix E2E decrpytion and add whatsapp read receipts"
+
+
 ## 🚀 Cara Setup
 
 ### 1. Prerequisites

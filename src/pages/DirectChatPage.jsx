@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../components/AuthProvider'
 import { useCall } from '../components/CallProvider'
 import { supabase } from '../lib/supabase'
-import { encryptMessage, decryptMessage, loadOrCreateKey } from '../lib/encryption'
+import { encryptMessage, decryptMessage, deriveKeyFromPassword } from '../lib/encryption'
 import ChatBubble from '../components/ChatBubble'
 import Avatar from '../components/Avatar'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -34,10 +34,12 @@ export default function DirectChatPage() {
   const fileInputRef = useRef(null)
   const inputRef = useRef(null)
 
-  // Load encryption key
+  // Load encryption key deterministically from conversation ID
   useEffect(() => {
-    loadOrCreateKey().then(setEncKey)
-  }, [])
+    if (conversationId) {
+      deriveKeyFromPassword(conversationId).then(setEncKey)
+    }
+  }, [conversationId])
 
   // Load conversation data
   useEffect(() => {
@@ -52,24 +54,34 @@ export default function DirectChatPage() {
     const channel = supabase
       .channel(`dm:${conversationId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'direct_messages',
         filter: `conversation_id=eq.${conversationId}`,
       }, async (payload) => {
-        const newMsg = payload.new
-        let decryptedContent = ''
-        if (newMsg.content && newMsg.iv) {
-          decryptedContent = await decryptMessage(newMsg.content, newMsg.iv, encKey)
-        } else if (newMsg.content) {
-          decryptedContent = newMsg.content
-        }
+        if (payload.eventType === 'INSERT') {
+          const newMsg = payload.new
+          let decryptedContent = ''
+          if (newMsg.content && newMsg.iv) {
+            decryptedContent = await decryptMessage(newMsg.content, newMsg.iv, encKey)
+          } else if (newMsg.content) {
+            decryptedContent = newMsg.content
+          }
 
-        setMessages(prev => {
-          if (prev.some(m => m.id === newMsg.id)) return prev
-          return [...prev, { ...newMsg, decryptedContent }]
-        })
-        scrollToBottom()
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev
+            return [...prev, { ...newMsg, decryptedContent }]
+          })
+          scrollToBottom()
+
+          // Mark as read if we received it
+          if (newMsg.sender_id !== profile.id && newMsg.status !== 'read') {
+            supabase.from('direct_messages').update({ status: 'read' }).eq('id', newMsg.id).then()
+          }
+        } else if (payload.eventType === 'UPDATE') {
+          // Update status (e.g. sent -> delivered -> read)
+          setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, status: payload.new.status } : m))
+        }
       })
       .subscribe()
 
@@ -114,7 +126,16 @@ export default function DirectChatPage() {
 
       if (!messagesData) return
 
-      const key = encKey || await loadOrCreateKey()
+      const key = encKey || await deriveKeyFromPassword(conversationId)
+
+      // Mark unread messages as read
+      const unreadIds = messagesData.filter(m => m.sender_id !== profile.id && m.status !== 'read').map(m => m.id)
+      if (unreadIds.length > 0) {
+        supabase.from('direct_messages').update({ status: 'read' }).in('id', unreadIds).then()
+        messagesData.forEach(m => {
+          if (unreadIds.includes(m.id)) m.status = 'read'
+        })
+      }
 
       const decrypted = await Promise.all(
         messagesData.map(async (msg) => {
@@ -143,7 +164,7 @@ export default function DirectChatPage() {
 
     setSending(true)
     try {
-      const key = encKey || await loadOrCreateKey()
+      const key = encKey || await deriveKeyFromPassword(conversationId)
       let fileUrl = ''
       let fileName = ''
       let fileSize = 0

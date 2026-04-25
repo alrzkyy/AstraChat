@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../components/AuthProvider'
 import Avatar from '../components/Avatar'
 import {
@@ -13,7 +13,8 @@ import {
   Menu,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -26,7 +27,37 @@ const navItems = [
 export default function AppLayout({ hideNav = false }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Global listener: mark messages as "delivered" (2 gray checks) when app is open
+  useEffect(() => {
+    if (!profile?.id) return
+
+    const channel = supabase
+      .channel('global-dm-receipts')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'direct_messages'
+      }, (payload) => {
+        const newMsg = payload.new
+        // If message is sent by someone else and we received it globally
+        if (newMsg.sender_id !== profile.id && newMsg.status === 'sent') {
+          const isOnChatPage = location.pathname === `/dm/${newMsg.conversation_id}`
+          // If we are NOT on the chat page, mark as delivered.
+          // (If we ARE on the chat page, DirectChatPage will mark it as read).
+          if (!isOnChatPage) {
+            supabase.from('direct_messages').update({ status: 'delivered' }).eq('id', newMsg.id).then()
+          }
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.id, location.pathname])
 
   const handleSignOut = async () => {
     await signOut()

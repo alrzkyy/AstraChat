@@ -1,6 +1,6 @@
 import Avatar from './Avatar'
 import { formatTime, formatFileSize } from '../lib/utils'
-import { FileText, Download, CheckCheck, ClipboardList, Clock, Info } from 'lucide-react'
+import { FileText, Download, CheckCheck, Check, ClipboardList, Clock, Info } from 'lucide-react'
 
 // Simple formatter for whatsapp-style text
 const formatMessageText = (text) => {
@@ -169,8 +169,14 @@ export default function ChatBubble({ message, isOwn, senderProfile }) {
             <p className="text-[10px]">
               {formatTime(message.created_at)}
             </p>
-            {isOwn && (
+            {isOwn && message.status === 'read' && (
               <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+            )}
+            {isOwn && message.status === 'delivered' && (
+              <CheckCheck className="w-3.5 h-3.5 text-white/70" />
+            )}
+            {isOwn && (message.status === 'sent' || !message.status) && (
+              <Check className="w-3.5 h-3.5 text-white/70" />
             )}
           </div>
         </div>

@@ -106,3 +106,33 @@ export async function decryptMessage(ciphertext, ivBase64, key) {
     return '[Pesan tidak dapat didekripsi]'
   }
 }
+
+/**
+ * Derive a deterministic AES-GCM key from a password/seed (e.g., conversation ID).
+ * This allows two users to generate the exact same encryption key without exchanging it.
+ */
+export async function deriveKeyFromPassword(password) {
+  const encoder = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits', 'deriveKey']
+  )
+
+  const salt = encoder.encode(password + 'astrachat_salt_v1')
+
+  return await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: ALGORITHM, length: KEY_LENGTH },
+    true,
+    ['encrypt', 'decrypt']
+  )
+}

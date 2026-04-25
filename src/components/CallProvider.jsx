@@ -75,14 +75,19 @@ export function CallProvider({ children }) {
           pendingOfferRef.current = payload
           return
         }
-        await handleOffer(payload)
+        await handleOfferRef.current(payload)
       })
       .on('broadcast', { event: 'call-answer' }, async ({ payload }) => {
         const pc = peerConnectionRef.current
         if (!pc) return
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
-          await flushIceCandidates(pc)
+          
+          // Flush ICE candidates using the queue directly
+          while (iceCandidatesQueue.current.length > 0) {
+            const candidate = iceCandidatesQueue.current.shift()
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn(e))
+          }
         } catch (err) {
           console.error('Error handling answer:', err)
         }
@@ -146,7 +151,18 @@ export function CallProvider({ children }) {
     })
   }, [])
 
-  const handleOffer = async (payload) => {
+  const flushIceCandidates = useCallback(async (pc) => {
+    while (iceCandidatesQueue.current.length > 0) {
+      const candidate = iceCandidatesQueue.current.shift()
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate))
+      } catch (e) {
+        console.warn('Failed to add ICE candidate:', e)
+      }
+    }
+  }, [])
+
+  const handleOffer = useCallback(async (payload) => {
     const pc = peerConnectionRef.current
     if (!pc) return
     try {
@@ -158,18 +174,13 @@ export function CallProvider({ children }) {
     } catch (err) {
       console.error('Error handling offer:', err)
     }
-  }
+  }, [sendSignal, flushIceCandidates])
 
-  const flushIceCandidates = async (pc) => {
-    while (iceCandidatesQueue.current.length > 0) {
-      const candidate = iceCandidatesQueue.current.shift()
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate))
-      } catch (e) {
-        console.warn('Failed to add ICE candidate:', e)
-      }
-    }
-  }
+  // Keep a ref to handleOffer so useEffect can use the latest version without re-subscribing
+  const handleOfferRef = useRef(handleOffer)
+  useEffect(() => {
+    handleOfferRef.current = handleOffer
+  }, [handleOffer])
 
   const playRingtone = () => {
     try {
@@ -305,6 +316,9 @@ export function CallProvider({ children }) {
 
     try {
       await setupPeerConnection(callType)
+      
+      // CRITICAL: Update state so UI switches from Modal to CallScreen
+      setCallState('connected')
 
       // Process pending offer if exists
       if (pendingOfferRef.current) {
@@ -316,7 +330,7 @@ export function CallProvider({ children }) {
       alert('Gagal menjawab panggilan. Pastikan izin kamera/mikrofon diaktifkan.')
       rejectCall()
     }
-  }, [callType, setupPeerConnection])
+  }, [callType, setupPeerConnection, handleOffer, rejectCall])
 
   const rejectCall = useCallback(() => {
     stopRingtone()

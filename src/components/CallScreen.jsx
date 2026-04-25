@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react'
-import { useCall } from './CallProvider'
+import { useEffect, useRef, useState } from 'react'
 import Avatar from './Avatar'
 import {
   PhoneOff, Mic, MicOff, Video, VideoOff,
@@ -7,13 +6,12 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 
-export default function CallScreen() {
-  const {
-    callState, callType, remoteUser,
-    localStream, remoteStream,
-    isMuted, isCameraOff, callDuration,
-    endCall, toggleMute, toggleCamera,
-  } = useCall()
+export default function CallScreen({
+  callState, callType, remoteUser,
+  localStream, remoteStream,
+  isMuted, isCameraOff, callDuration,
+  endCall, toggleMute, toggleCamera
+}) {
 
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)

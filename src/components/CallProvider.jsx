@@ -405,7 +405,19 @@ export function CallProvider({ children }) {
       )}
 
       {(callState === 'calling' || callState === 'connected') && (
-        <CallScreen />
+        <CallScreen 
+          callState={callState}
+          callType={callType}
+          remoteUser={remoteUser}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          callDuration={callDuration}
+          endCall={endCall}
+          toggleMute={toggleMute}
+          toggleCamera={toggleCamera}
+        />
       )}
     </CallContext.Provider>
   )
